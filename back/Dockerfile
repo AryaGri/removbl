@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM pytorch/pytorch:2.9.1-cuda12.6-cudnn9-runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -21,4 +21,4 @@ RUN python -m pip install --upgrade pip && \
 
 COPY . .
 
-CMD ["uvicorn", "main.py:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
