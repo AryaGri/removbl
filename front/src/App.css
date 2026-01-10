@@ -483,4 +483,52 @@ body {
     font-size: 0.8rem;
     border-radius: 35px;
   }
+
+  /* Стили для страницы "в разработке" */
+.under-development {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  background-color: #f8f9fa;
+  border-radius: 12px;
+  margin: 20px 0;
+}
+
+.development-content {
+  text-align: center;
+  padding: 40px;
+  max-width: 500px;
+}
+
+.development-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+
+.development-content h2 {
+  font-size: 24px;
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.development-content p {
+  color: #666;
+  margin-bottom: 30px;
+}
+
+.development-button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 12px 30px;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.development-button:hover {
+  background-color: #0056b3;
+}
 }
