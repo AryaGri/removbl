@@ -10,11 +10,15 @@ function App() {
   const [selectedFunction, setSelectedFunction] = useState('remove-bg');
   const [currentPage, setCurrentPage] = useState('main');
   const [error, setError] = useState(null);
+  const [backendStatus, setBackendStatus] = useState('checking');
   
   const fileInputRef = useRef(null);
 
-  // URL вашего Python бэкенда
-  const API_URL = 'http://localhost:8000';
+  // ВАЖНО: Используем относительный путь
+  // React dev server будет проксировать запросы на бэкенд
+  const API_URL = process.env.NODE_ENV === 'production' 
+    ? 'http://back-service:8000'  // В продакшене внутри Docker сети
+    : '';  // В разработке - относительный путь (проксируется через dev server)
 
   const isRemoveBgSelected = selectedFunction === 'remove-bg';
   const isMainPage = currentPage === 'main';
@@ -47,41 +51,39 @@ function App() {
     }
   };
 
-  // Функция для отправки изображения на бэкенд - ИСПРАВЛЕННАЯ ВЕРСИЯ
+  // Функция для отправки изображения на бэкенд
   const processImage = async (imageFile) => {
-    // Создаем FormData ПРАВИЛЬНО
+    console.log('Отправка файла на бэкенд...');
+    
     const formData = new FormData();
-    // Важно: используем 'file' как имя параметра (как в бэкенде)
     formData.append('file', imageFile);
-    // НЕ указываем третьим параметром имя файла, если бэкенд ругается
     
     try {
-      const response = await fetch(`${API_URL}/process`, {
+      // Используем относительный путь
+      const response = await fetch('/api/process', {
         method: 'POST',
         body: formData,
-        // ВАЖНО: НЕ добавляем заголовок Content-Type вручную!
-        // Браузер сам поставит правильный с boundary
       });
       
+      console.log('Статус ответа:', response.status);
+      
       if (!response.ok) {
-        // Попробуем получить текст ошибки
         let errorText = 'Неизвестная ошибка сервера';
         try {
           errorText = await response.text();
+          console.log('Текст ошибки:', errorText);
         } catch (e) {
-          // Не удалось прочитать текст
-        }
-        
-        // Пробуем разные варианты формата
-        if (response.status === 400) {
-          // Пробуем отправить по-другому
-          return await processImageAlternative(imageFile);
+          console.log('Не удалось прочитать текст ошибки');
         }
         
         throw new Error(`Ошибка сервера (${response.status}): ${errorText}`);
       }
       
+      const contentType = response.headers.get('content-type');
+      console.log('Content-Type ответа:', contentType);
+      
       const blob = await response.blob();
+      console.log('Размер blob:', blob.size, 'тип:', blob.type);
       
       if (!blob.type.startsWith('image/')) {
         throw new Error('Сервер вернул не изображение');
@@ -104,55 +106,6 @@ function App() {
     }
   };
 
-  // Альтернативный метод отправки - если первый не работает
-  const processImageAlternative = async (imageFile) => {
-    console.log('Пробуем альтернативный метод отправки...');
-    
-    // Вариант 1: С явным именем файла
-    const formData = new FormData();
-    formData.append('file', imageFile, imageFile.name);
-    
-    const response = await fetch(`${API_URL}/process`, {
-      method: 'POST',
-      body: formData,
-    });
-    
-    if (!response.ok) {
-      // Вариант 2: Может бэкенд ожидает другой Content-Type?
-      const formData2 = new FormData();
-      formData2.append('file', imageFile);
-      
-      const response2 = await fetch(`${API_URL}/process`, {
-        method: 'POST',
-        body: formData2,
-        headers: {
-          // Явно указываем Content-Type
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
-      if (!response2.ok) {
-        throw new Error(`Все методы отправки не работают (${response2.status})`);
-      }
-      
-      const blob = await response2.blob();
-      const processedUrl = URL.createObjectURL(blob);
-      
-      return {
-        url: processedUrl,
-        blob: blob
-      };
-    }
-    
-    const blob = await response.blob();
-    const processedUrl = URL.createObjectURL(blob);
-    
-    return {
-      url: processedUrl,
-      blob: blob
-    };
-  };
-
   const handleProcessImage = async () => {
     if (!originalImage || !isRemoveBgSelected || !isMainPage) return;
     
@@ -165,18 +118,18 @@ function App() {
       setProcessedImage({
         url: result.url,
         blob: result.blob,
-        name: `processed-${originalImage.name.replace(/\.[^/.]+$/, "")}.jpg`
+        name: `processed-${originalImage.name.replace(/\.[^/.]+$/, "")}.png`
       });
       setCurrentView('result');
     } catch (err) {
-      setError(err.message || 'Не удалось обработать изображение. Проверьте: 1) Бэкенд запущен? 2) CORS настроен?');
+      setError(err.message);
       console.error('Ошибка обработки:', err);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // ... остальные функции остаются без изменений
+  // ... остальные функции без изменений ...
   const handleFunctionSelect = (functionName) => {
     setSelectedFunction(functionName);
     setIsFunctionsOpen(false);
@@ -225,7 +178,7 @@ function App() {
     const url = window.URL.createObjectURL(processedImage.blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = processedImage.name || 'processed-image.jpg';
+    link.download = processedImage.name || 'processed-image.png';
     document.body.appendChild(link);
     link.click();
     
@@ -256,11 +209,20 @@ function App() {
   React.useEffect(() => {
     const checkBackend = async () => {
       try {
-        const response = await fetch(`${API_URL}/docs`);
-        console.log('Бэкенд доступен');
+        setBackendStatus('checking');
+        
+        const response = await fetch('/api/docs');
+        
+        if (response.ok) {
+          setBackendStatus('available');
+          setError(null);
+        } else {
+          setBackendStatus('unavailable');
+          setError(`Бэкенд недоступен (статус: ${response.status})`);
+        }
       } catch (err) {
-        console.warn('Бэкенд недоступен:', err.message);
-        setError('Бэкенд недоступен. Убедитесь что сервер запущен на localhost:8000');
+        setBackendStatus('unavailable');
+        setError(`Бэкенд недоступен: ${err.message}`);
       }
     };
     
@@ -337,16 +299,21 @@ function App() {
 
         <div className="content-area">
           {error && (
-            <div className="error-message" style={{
-              backgroundColor: '#fee',
-              color: '#c33',
-              padding: '12px 20px',
-              borderRadius: '8px',
-              marginBottom: '20px',
-              border: '1px solid #fcc',
-              textAlign: 'center'
-            }}>
-              {error}
+            <div className="error-message">
+              <strong>Ошибка:</strong> {error}
+              <div style={{ fontSize: '0.9rem', marginTop: '5px' }}>
+                {backendStatus === 'checking' && 'Проверяем подключение к серверу...'}
+                {backendStatus === 'unavailable' && (
+                  <div>
+                    <p>Попробуйте:</p>
+                    <ol style={{ textAlign: 'left', margin: '5px 0' }}>
+                      <li>Откройте <a href="http://localhost:8000/docs" target="_blank" rel="noopener noreferrer">http://localhost:8000/docs</a> в новой вкладке</li>
+                      <li>Если страница открывается, значит бэкенд работает</li>
+                      <li>Возможно, проблема с CORS настройками бэкенда</li>
+                    </ol>
+                  </div>
+                )}
+              </div>
             </div>
           )}
           
@@ -381,7 +348,14 @@ function App() {
                 )}
                 
                 {currentView === 'upload' && isRemoveBgSelected && (
-                  <p className="subtitle">Автоматически и бесплатно</p>
+                  <>
+                    <p className="subtitle">Автоматически и бесплатно</p>
+                    {backendStatus === 'available' && (
+                      <p style={{ color: 'green', fontSize: '0.9rem', marginTop: '5px' }}>
+                        ✓ Сервер обработки доступен
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -395,8 +369,8 @@ function App() {
                             <div className="upload-icon">📁</div>
                             <p className="upload-text">Выбрать изображение</p>
                             <p className="upload-subtext">PNG, JPG, JPEG до 10MB</p>
-                            <p style={{ fontSize: '0.8rem', color: '#888', marginTop: '10px' }}>
-                              API: {API_URL}/process
+                            <p className="backend-info">
+                              Сервер: {API_URL || 'локальный прокси'}
                             </p>
                           </div>
                           <input
@@ -422,6 +396,7 @@ function App() {
                                 className="preview-image"
                               />
                             </div>
+                            <p className="image-info">{originalImage.name}</p>
                           </div>
                         </div>
                         
@@ -439,6 +414,12 @@ function App() {
                             'Отправить на обработку'
                           )}
                         </button>
+                        
+                        {isProcessing && (
+                          <p style={{ color: '#666', marginTop: '10px' }}>
+                            Идет обработка на сервере...
+                          </p>
+                        )}
                       </div>
                     )}
 
@@ -465,12 +446,7 @@ function App() {
                                   className="preview-image"
                                 />
                               ) : (
-                                <div style={{
-                                  padding: '40px',
-                                  color: '#666',
-                                  fontStyle: 'italic',
-                                  textAlign: 'center'
-                                }}>
+                                <div className="no-result">
                                   Результат не получен
                                 </div>
                               )}
