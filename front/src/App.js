@@ -14,11 +14,10 @@ function App() {
   
   const fileInputRef = useRef(null);
 
-  // ВАЖНО: Используем относительный путь
-  // React dev server будет проксировать запросы на бэкенд
+  // Используем прямой URL к бэкенду
   const API_URL = process.env.NODE_ENV === 'production' 
     ? 'http://back-service:8000'  // В продакшене внутри Docker сети
-    : '';  // В разработке - относительный путь (проксируется через dev server)
+    : 'http://localhost:8000';  // В разработке - прямое подключение к localhost:8000
 
   const isRemoveBgSelected = selectedFunction === 'remove-bg';
   const isMainPage = currentPage === 'main';
@@ -54,13 +53,14 @@ function App() {
   // Функция для отправки изображения на бэкенд
   const processImage = async (imageFile) => {
     console.log('Отправка файла на бэкенд...');
+    console.log('URL бэкенда:', API_URL);
     
     const formData = new FormData();
     formData.append('file', imageFile);
     
     try {
-      // Используем относительный путь
-      const response = await fetch('/api/process', {
+      // Используем полный URL к бэкенду
+      const response = await fetch(`${API_URL}/process`, {
         method: 'POST',
         body: formData,
       });
@@ -118,7 +118,7 @@ function App() {
       setProcessedImage({
         url: result.url,
         blob: result.blob,
-        name: `processed-${originalImage.name.replace(/\.[^/.]+$/, "")}.png`
+        name: `processed-${originalImage.name.replace(/\.[^/.]+$/, "")}.jpg`
       });
       setCurrentView('result');
     } catch (err) {
@@ -129,7 +129,6 @@ function App() {
     }
   };
 
-  // ... остальные функции без изменений ...
   const handleFunctionSelect = (functionName) => {
     setSelectedFunction(functionName);
     setIsFunctionsOpen(false);
@@ -178,7 +177,7 @@ function App() {
     const url = window.URL.createObjectURL(processedImage.blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = processedImage.name || 'processed-image.png';
+    link.download = processedImage.name || 'processed-image.jpg';
     document.body.appendChild(link);
     link.click();
     
@@ -211,7 +210,8 @@ function App() {
       try {
         setBackendStatus('checking');
         
-        const response = await fetch('/api/docs');
+        // Проверяем прямой URL бэкенда
+        const response = await fetch(`${API_URL}/docs`);
         
         if (response.ok) {
           setBackendStatus('available');
@@ -229,7 +229,7 @@ function App() {
     if (isMainPage && isRemoveBgSelected) {
       checkBackend();
     }
-  }, [isMainPage, isRemoveBgSelected]);
+  }, [isMainPage, isRemoveBgSelected, API_URL]);
 
   return (
     <div className="app">
@@ -307,9 +307,9 @@ function App() {
                   <div>
                     <p>Попробуйте:</p>
                     <ol style={{ textAlign: 'left', margin: '5px 0' }}>
-                      <li>Откройте <a href="http://localhost:8000/docs" target="_blank" rel="noopener noreferrer">http://localhost:8000/docs</a> в новой вкладке</li>
+                      <li>Откройте <a href={`${API_URL}/docs`} target="_blank" rel="noopener noreferrer">{API_URL}/docs</a> в новой вкладке</li>
                       <li>Если страница открывается, значит бэкенд работает</li>
-                      <li>Возможно, проблема с CORS настройками бэкенда</li>
+                      <li>Если не открывается, проверьте что бэкенд запущен на порту 8000</li>
                     </ol>
                   </div>
                 )}
@@ -352,7 +352,12 @@ function App() {
                     <p className="subtitle">Автоматически и бесплатно</p>
                     {backendStatus === 'available' && (
                       <p style={{ color: 'green', fontSize: '0.9rem', marginTop: '5px' }}>
-                        ✓ Сервер обработки доступен
+                        ✓ Сервер обработки доступен по адресу: {API_URL}
+                      </p>
+                    )}
+                    {backendStatus === 'unavailable' && (
+                      <p style={{ color: 'red', fontSize: '0.9rem', marginTop: '5px' }}>
+                        ✗ Сервер недоступен: {API_URL}
                       </p>
                     )}
                   </>
@@ -370,7 +375,7 @@ function App() {
                             <p className="upload-text">Выбрать изображение</p>
                             <p className="upload-subtext">PNG, JPG, JPEG до 10MB</p>
                             <p className="backend-info">
-                              Сервер: {API_URL || 'локальный прокси'}
+                              Сервер: {API_URL}
                             </p>
                           </div>
                           <input
