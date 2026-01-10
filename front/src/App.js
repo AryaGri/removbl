@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import './App.css';
-import fixedImage from './second.png';
 
 function App() {
   const [originalImage, setOriginalImage] = useState(null);
@@ -9,145 +8,168 @@ function App() {
   const [currentView, setCurrentView] = useState('upload');
   const [isFunctionsOpen, setIsFunctionsOpen] = useState(false);
   const [selectedFunction, setSelectedFunction] = useState('remove-bg');
-  const [currentPage, setCurrentPage] = useState('main'); // 'main', 'profile'
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [currentPage, setCurrentPage] = useState('main');
+  const [error, setError] = useState(null);
+  
+  const fileInputRef = useRef(null);
 
-  // Проверка, выбрана ли функция удаления фона
+  // URL вашего Python бэкенда - он слушает на порту 8000
+  const API_URL = 'http://localhost:8000';
+
   const isRemoveBgSelected = selectedFunction === 'remove-bg';
   const isMainPage = currentPage === 'main';
 
   const handleImageUpload = (event) => {
-    // Если выбрана не основная функция, не обрабатываем загрузку
     if (!isRemoveBgSelected || !isMainPage) return;
     
     const file = event.target.files[0];
     if (file && file.type.startsWith('image/')) {
+      if (file.size > 10 * 1024 * 1024) {
+        setError('Файл слишком большой. Максимальный размер: 10MB');
+        return;
+      }
+      
       const imageUrl = URL.createObjectURL(file);
       setOriginalImage({
         file,
-        url: imageUrl
+        url: imageUrl,
+        name: file.name
       });
       setCurrentView('processing');
       setProcessedImage(null);
-      setUploadProgress(0);
+      setError(null);
+    }
+  };
+
+  const handleUploadClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  // Функция для отправки изображения на ваш бэкенд
+  const processImage = async (imageFile) => {
+    const formData = new FormData();
+    formData.append('file', imageFile);
+    
+    try {
+      const response = await fetch(`${API_URL}/process`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Ошибка сервера: ${response.status} - ${errorText}`);
+      }
+      
+      // Получаем обработанное изображение как blob
+      const blob = await response.blob();
+      
+      // Проверяем, что это действительно изображение
+      if (!blob.type.startsWith('image/')) {
+        throw new Error('Сервер вернул не изображение');
+      }
+      
+      const processedUrl = URL.createObjectURL(blob);
+      
+      return {
+        url: processedUrl,
+        blob: blob
+      };
+    } catch (err) {
+      console.error('Ошибка при обработке изображения:', err);
+      
+      // Если ошибка сети (бэкенд не запущен)
+      if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+        throw new Error('Не удалось подключиться к серверу обработки. Убедитесь, что бэкенд запущен на localhost:8000');
+      }
+      
+      throw new Error(`Ошибка: ${err.message}`);
     }
   };
 
   const handleProcessImage = async () => {
-    if (!originalImage || !originalImage.file || !isRemoveBgSelected || !isMainPage) return;
+    if (!originalImage || !isRemoveBgSelected || !isMainPage) return;
     
     setIsProcessing(true);
-    setUploadProgress(0);
+    setError(null);
     
     try {
-      const formData = new FormData();
-      formData.append("file", originalImage.file); // имя "file" как в FastAPI
-
-      // Симуляция прогресса для UX
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return prev;
-          }
-          return prev + 10;
-        });
-      }, 300);
-
-      const response = await fetch("http://back-service:8000/process", {
-        method: "POST",
-        body: formData,
+      // Отправляем изображение на бэкенд
+      const result = await processImage(originalImage.file);
+      
+      setProcessedImage({
+        url: result.url,
+        blob: result.blob,
+        name: `processed-${originalImage.name.replace(/\.[^/.]+$/, "")}.jpg`
       });
-
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-
-      if (!response.ok) {
-        throw new Error(`Ошибка загрузки: ${response.status}`);
-      }
-
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      
-      const processedImageData = {
-        file: blob,
-        url: url
-      };
-      
-      setProcessedImage(processedImageData);
       setCurrentView('result');
-      
-    } catch (error) {
-      console.error("Upload failed:", error);
-      // В случае ошибки, показываем заглушку
-      const processedImageData = {
-        file: null,
-        url: fixedImage
-      };
-      setProcessedImage(processedImageData);
-      setCurrentView('result');
+    } catch (err) {
+      setError(err.message || 'Не удалось обработать изображение. Попробуйте еще раз.');
+      console.error('Ошибка обработки:', err);
     } finally {
       setIsProcessing(false);
-      setUploadProgress(0);
     }
   };
 
   const handleFunctionSelect = (functionName) => {
     setSelectedFunction(functionName);
     setIsFunctionsOpen(false);
-    setCurrentPage('main'); // Возвращаем на главную страницу
+    setCurrentPage('main');
     
-    // Сбрасываем состояние при смене функции
-    if (originalImage && originalImage.url) {
-      URL.revokeObjectURL(originalImage.url);
-    }
-    if (processedImage && processedImage.url) {
-      URL.revokeObjectURL(processedImage.url);
-    }
+    cleanupImages();
     
     setOriginalImage(null);
     setProcessedImage(null);
     setCurrentView('upload');
+    setError(null);
   };
 
   const handleProfileClick = () => {
     setCurrentPage('profile');
     setIsFunctionsOpen(false);
     
-    // Сбрасываем состояние изображений при переходе в профиль
-    if (originalImage && originalImage.url) {
-      URL.revokeObjectURL(originalImage.url);
-    }
-    if (processedImage && processedImage.url) {
-      URL.revokeObjectURL(processedImage.url);
-    }
+    cleanupImages();
     
     setOriginalImage(null);
     setProcessedImage(null);
+    setError(null);
   };
 
-  const handleNewImage = () => {
+  const cleanupImages = () => {
     if (originalImage && originalImage.url) {
       URL.revokeObjectURL(originalImage.url);
     }
     if (processedImage && processedImage.url) {
       URL.revokeObjectURL(processedImage.url);
     }
+  };
+
+  const handleNewImage = () => {
+    cleanupImages();
     
     setOriginalImage(null);
     setProcessedImage(null);
     setCurrentView('upload');
+    setError(null);
   };
 
   const handleDownload = () => {
-    if (!processedImage || !processedImage.url) return;
+    if (!processedImage || !processedImage.blob) return;
 
+    const url = window.URL.createObjectURL(processedImage.blob);
     const link = document.createElement('a');
-    link.href = processedImage.url;
-    link.download = `processed-image-${Date.now()}.png`;
+    link.href = url;
+    link.download = processedImage.name || 'processed-image.jpg';
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    
+    // Очистка
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }, 100);
   };
 
   const toggleFunctionsDropdown = () => {
@@ -170,7 +192,6 @@ function App() {
   return (
     <div className="app">
       <main className="main-content">
-        {/* Верхняя навигация */}
         <div className="top-navigation">
           <div className="nav-left">
             <div className="logo">remov'bl</div>
@@ -180,6 +201,10 @@ function App() {
                 onClick={() => {
                   setCurrentPage('main');
                   setIsFunctionsOpen(false);
+                  cleanupImages();
+                  setOriginalImage(null);
+                  setProcessedImage(null);
+                  setCurrentView('upload');
                 }}
               >
                 {getFunctionDisplayName()}
@@ -231,7 +256,20 @@ function App() {
         </div>
 
         <div className="content-area">
-          {/* Страница профиля */}
+          {error && (
+            <div className="error-message" style={{
+              backgroundColor: '#fee',
+              color: '#c33',
+              padding: '12px 20px',
+              borderRadius: '8px',
+              marginBottom: '20px',
+              border: '1px solid #fcc',
+              textAlign: 'center'
+            }}>
+              {error}
+            </div>
+          )}
+          
           {currentPage === 'profile' ? (
             <div className="under-development">
               <div className="development-content">
@@ -240,22 +278,23 @@ function App() {
                 <p>Личный кабинет пользователя скоро будет доступен</p>
                 <button 
                   className="development-button"
-                  onClick={() => setCurrentPage('main')}
+                  onClick={() => {
+                    setCurrentPage('main');
+                    setError(null);
+                  }}
                 >
                   Вернуться на главную
                 </button>
               </div>
             </div>
           ) : (
-            /* Основной контент (функции) */
             <>
-              {/* Заголовок */}
               <div className="content-header">
                 {isRemoveBgSelected ? (
                   <>
                     {currentView === 'upload' && <h1>Удаление фона на изображениях</h1>}
-                    {currentView === 'processing' && <h2>Удаление фона</h2>}
-                    {currentView === 'result' && <h2>Изображение готово!</h2>}
+                    {currentView === 'processing' && <h2>Обработка изображения</h2>}
+                    {currentView === 'result' && <h2>Изображение обработано!</h2>}
                   </>
                 ) : (
                   <h1>{getFunctionDisplayName()}</h1>
@@ -266,32 +305,28 @@ function App() {
                 )}
               </div>
 
-              {/* Основной контент */}
               <div className="content-main">
-                {/* Если выбрана функция удаления фона */}
                 {isRemoveBgSelected ? (
                   <>
-                    {/* Экран загрузки */}
                     {currentView === 'upload' && (
                       <div className="upload-section">
-                        <div className="upload-area" onClick={() => document.getElementById('file-input').click()}>
+                        <div className="upload-area" onClick={handleUploadClick}>
                           <div className="upload-content">
                             <div className="upload-icon">📁</div>
                             <p className="upload-text">Выбрать изображение</p>
                             <p className="upload-subtext">PNG, JPG, JPEG до 10MB</p>
                           </div>
                           <input
+                            ref={fileInputRef}
                             type="file"
                             accept="image/*"
                             onChange={handleImageUpload}
                             style={{ display: 'none' }}
-                            id="file-input"
                           />
                         </div>
                       </div>
                     )}
 
-                    {/* Экран обработки */}
                     {currentView === 'processing' && originalImage && (
                       <div className="processing-section">
                         <div className="preview-container">
@@ -307,21 +342,6 @@ function App() {
                           </div>
                         </div>
                         
-                        {/* Индикатор прогресса */}
-                        {isProcessing && (
-                          <div className="progress-container">
-                            <div className="progress-bar">
-                              <div 
-                                className="progress-fill" 
-                                style={{ width: `${uploadProgress}%` }}
-                              ></div>
-                            </div>
-                            <p className="progress-text">
-                              {uploadProgress < 100 ? 'Обработка изображения...' : 'Завершение...'}
-                            </p>
-                          </div>
-                        )}
-                        
                         <button 
                           className={`process-button ${isProcessing ? 'processing' : ''}`}
                           onClick={handleProcessImage}
@@ -330,44 +350,71 @@ function App() {
                           {isProcessing ? (
                             <>
                               <div className="spinner"></div>
-                              Обработка...
+                              Обработка на сервере...
                             </>
                           ) : (
-                            'Удалить фон'
+                            'Обработать изображение'
                           )}
                         </button>
+                        
+                        {!isProcessing && (
+                          <p style={{
+                            textAlign: 'center',
+                            marginTop: '10px',
+                            color: '#666',
+                            fontSize: '0.9rem'
+                          }}>
+                            Изображение будет отправлено на сервер для обработки
+                          </p>
+                        )}
                       </div>
                     )}
 
-                    {/* Экран результата */}
                     {currentView === 'result' && processedImage && originalImage && (
                       <div className="result-section">
                         <div className="comparison-container">
                           <div className="image-preview">
-                            <h3>До</h3>
+                            <h3>Исходное</h3>
                             <div className="image-container">
                               <img 
                                 src={originalImage.url} 
-                                alt="Before"
+                                alt="До обработки"
                                 className="preview-image"
                               />
                             </div>
                           </div>
                           <div className="image-preview">
-                            <h3>После</h3>
+                            <h3>Обработанное</h3>
                             <div className="image-container">
-                              <img 
-                                src={processedImage.url} 
-                                alt="After"
-                                className="preview-image"
-                              />
+                              {processedImage.url ? (
+                                <img 
+                                  src={processedImage.url} 
+                                  alt="После обработки"
+                                  className="preview-image"
+                                  onLoad={() => {
+                                    console.log('Обработанное изображение загружено с сервера');
+                                  }}
+                                  onError={() => {
+                                    console.error('Ошибка загрузки обработанного изображения');
+                                  }}
+                                />
+                              ) : (
+                                <div style={{
+                                  padding: '40px',
+                                  color: '#666',
+                                  fontStyle: 'italic',
+                                  textAlign: 'center'
+                                }}>
+                                  Ошибка загрузки результата
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
                         
                         <div className="action-buttons">
                           <button className="download-button" onClick={handleDownload}>
-                            Скачать
+                            Скачать результат
                           </button>
                           <button className="secondary-button" onClick={handleNewImage}>
                             Обработать другое изображение
@@ -377,7 +424,6 @@ function App() {
                     )}
                   </>
                 ) : (
-                  /* Страница "в разработке" для других функций */
                   <div className="under-development">
                     <div className="development-content">
                       <div className="development-icon">🚧</div>
