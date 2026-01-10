@@ -13,7 +13,7 @@ function App() {
   
   const fileInputRef = useRef(null);
 
-  // URL вашего Python бэкенда - он слушает на порту 8000
+  // URL вашего Python бэкенда
   const API_URL = 'http://localhost:8000';
 
   const isRemoveBgSelected = selectedFunction === 'remove-bg';
@@ -47,26 +47,42 @@ function App() {
     }
   };
 
-  // Функция для отправки изображения на ваш бэкенд
+  // Функция для отправки изображения на бэкенд - ИСПРАВЛЕННАЯ ВЕРСИЯ
   const processImage = async (imageFile) => {
+    // Создаем FormData ПРАВИЛЬНО
     const formData = new FormData();
+    // Важно: используем 'file' как имя параметра (как в бэкенде)
     formData.append('file', imageFile);
+    // НЕ указываем третьим параметром имя файла, если бэкенд ругается
     
     try {
       const response = await fetch(`${API_URL}/process`, {
         method: 'POST',
         body: formData,
+        // ВАЖНО: НЕ добавляем заголовок Content-Type вручную!
+        // Браузер сам поставит правильный с boundary
       });
       
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Ошибка сервера: ${response.status} - ${errorText}`);
+        // Попробуем получить текст ошибки
+        let errorText = 'Неизвестная ошибка сервера';
+        try {
+          errorText = await response.text();
+        } catch (e) {
+          // Не удалось прочитать текст
+        }
+        
+        // Пробуем разные варианты формата
+        if (response.status === 400) {
+          // Пробуем отправить по-другому
+          return await processImageAlternative(imageFile);
+        }
+        
+        throw new Error(`Ошибка сервера (${response.status}): ${errorText}`);
       }
       
-      // Получаем обработанное изображение как blob
       const blob = await response.blob();
       
-      // Проверяем, что это действительно изображение
       if (!blob.type.startsWith('image/')) {
         throw new Error('Сервер вернул не изображение');
       }
@@ -80,13 +96,61 @@ function App() {
     } catch (err) {
       console.error('Ошибка при обработке изображения:', err);
       
-      // Если ошибка сети (бэкенд не запущен)
       if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-        throw new Error('Не удалось подключиться к серверу обработки. Убедитесь, что бэкенд запущен на localhost:8000');
+        throw new Error('Не удалось подключиться к серверу обработки');
       }
       
-      throw new Error(`Ошибка: ${err.message}`);
+      throw err;
     }
+  };
+
+  // Альтернативный метод отправки - если первый не работает
+  const processImageAlternative = async (imageFile) => {
+    console.log('Пробуем альтернативный метод отправки...');
+    
+    // Вариант 1: С явным именем файла
+    const formData = new FormData();
+    formData.append('file', imageFile, imageFile.name);
+    
+    const response = await fetch(`${API_URL}/process`, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      // Вариант 2: Может бэкенд ожидает другой Content-Type?
+      const formData2 = new FormData();
+      formData2.append('file', imageFile);
+      
+      const response2 = await fetch(`${API_URL}/process`, {
+        method: 'POST',
+        body: formData2,
+        headers: {
+          // Явно указываем Content-Type
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      if (!response2.ok) {
+        throw new Error(`Все методы отправки не работают (${response2.status})`);
+      }
+      
+      const blob = await response2.blob();
+      const processedUrl = URL.createObjectURL(blob);
+      
+      return {
+        url: processedUrl,
+        blob: blob
+      };
+    }
+    
+    const blob = await response.blob();
+    const processedUrl = URL.createObjectURL(blob);
+    
+    return {
+      url: processedUrl,
+      blob: blob
+    };
   };
 
   const handleProcessImage = async () => {
@@ -96,7 +160,6 @@ function App() {
     setError(null);
     
     try {
-      // Отправляем изображение на бэкенд
       const result = await processImage(originalImage.file);
       
       setProcessedImage({
@@ -106,13 +169,14 @@ function App() {
       });
       setCurrentView('result');
     } catch (err) {
-      setError(err.message || 'Не удалось обработать изображение. Попробуйте еще раз.');
+      setError(err.message || 'Не удалось обработать изображение. Проверьте: 1) Бэкенд запущен? 2) CORS настроен?');
       console.error('Ошибка обработки:', err);
     } finally {
       setIsProcessing(false);
     }
   };
 
+  // ... остальные функции остаются без изменений
   const handleFunctionSelect = (functionName) => {
     setSelectedFunction(functionName);
     setIsFunctionsOpen(false);
@@ -165,7 +229,6 @@ function App() {
     document.body.appendChild(link);
     link.click();
     
-    // Очистка
     setTimeout(() => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
@@ -188,6 +251,23 @@ function App() {
         return 'Удалить фон';
     }
   };
+
+  // Проверка доступности бэкенда при загрузке
+  React.useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        const response = await fetch(`${API_URL}/docs`);
+        console.log('Бэкенд доступен');
+      } catch (err) {
+        console.warn('Бэкенд недоступен:', err.message);
+        setError('Бэкенд недоступен. Убедитесь что сервер запущен на localhost:8000');
+      }
+    };
+    
+    if (isMainPage && isRemoveBgSelected) {
+      checkBackend();
+    }
+  }, [isMainPage, isRemoveBgSelected]);
 
   return (
     <div className="app">
@@ -292,7 +372,7 @@ function App() {
               <div className="content-header">
                 {isRemoveBgSelected ? (
                   <>
-                    {currentView === 'upload' && <h1>Удаление фона на изображениях</h1>}
+                    {currentView === 'upload' && <h1>Обработка изображений</h1>}
                     {currentView === 'processing' && <h2>Обработка изображения</h2>}
                     {currentView === 'result' && <h2>Изображение обработано!</h2>}
                   </>
@@ -315,6 +395,9 @@ function App() {
                             <div className="upload-icon">📁</div>
                             <p className="upload-text">Выбрать изображение</p>
                             <p className="upload-subtext">PNG, JPG, JPEG до 10MB</p>
+                            <p style={{ fontSize: '0.8rem', color: '#888', marginTop: '10px' }}>
+                              API: {API_URL}/process
+                            </p>
                           </div>
                           <input
                             ref={fileInputRef}
@@ -350,23 +433,12 @@ function App() {
                           {isProcessing ? (
                             <>
                               <div className="spinner"></div>
-                              Обработка на сервере...
+                              Отправка на сервер...
                             </>
                           ) : (
-                            'Обработать изображение'
+                            'Отправить на обработку'
                           )}
                         </button>
-                        
-                        {!isProcessing && (
-                          <p style={{
-                            textAlign: 'center',
-                            marginTop: '10px',
-                            color: '#666',
-                            fontSize: '0.9rem'
-                          }}>
-                            Изображение будет отправлено на сервер для обработки
-                          </p>
-                        )}
                       </div>
                     )}
 
@@ -374,7 +446,7 @@ function App() {
                       <div className="result-section">
                         <div className="comparison-container">
                           <div className="image-preview">
-                            <h3>Исходное</h3>
+                            <h3>До</h3>
                             <div className="image-container">
                               <img 
                                 src={originalImage.url} 
@@ -384,19 +456,13 @@ function App() {
                             </div>
                           </div>
                           <div className="image-preview">
-                            <h3>Обработанное</h3>
+                            <h3>После</h3>
                             <div className="image-container">
                               {processedImage.url ? (
                                 <img 
                                   src={processedImage.url} 
                                   alt="После обработки"
                                   className="preview-image"
-                                  onLoad={() => {
-                                    console.log('Обработанное изображение загружено с сервера');
-                                  }}
-                                  onError={() => {
-                                    console.error('Ошибка загрузки обработанного изображения');
-                                  }}
                                 />
                               ) : (
                                 <div style={{
@@ -405,7 +471,7 @@ function App() {
                                   fontStyle: 'italic',
                                   textAlign: 'center'
                                 }}>
-                                  Ошибка загрузки результата
+                                  Результат не получен
                                 </div>
                               )}
                             </div>
