@@ -430,60 +430,6 @@ body {
   }
 }
 
-@media (max-width: 480px) {
-  .upload-section h1 {
-    font-size: 1.8rem;
-  }
-  
-  .upload-section p {
-    font-size: 1rem;
-  }
-  
-  .upload-icon {
-    font-size: 3rem;
-  }
-  
-  .upload-text {
-    font-size: 1.2rem;
-  }
-  
-  .logo {
-    font-size: 1.5rem;
-  }
-  
-  .nav-button {
-    padding: 0.6rem 1.2rem;
-    font-size: 0.9rem;
-    border-radius: 40px; 
-  }
-  
-  .nav {
-    gap: 0.5rem;
-  }
-  
-  .user-photo {
-    max-width: 80px;
-    max-height: 80px;
-  }
-  
-  .upload-area {
-    border-radius: 30px; 
-    padding: 2rem 1rem;
-  }
-}
-
-@media (max-width: 320px) {
-  .user-photo {
-    max-width: 60px;
-    max-height: 60px;
-  }
-  
-  .nav-button {
-    padding: 0.5rem 1rem;
-    font-size: 0.8rem;
-    border-radius: 35px;
-  }
-
   /* Стили для страницы "в разработке" */
 .under-development {
   display: flex;
@@ -547,4 +493,58 @@ body {
 .development-button:active {
   transform: translateY(0);
 }
+
+@media (max-width: 480px) {
+  .upload-section h1 {
+    font-size: 1.8rem;
+  }
+  
+  .upload-section p {
+    font-size: 1rem;
+  }
+  
+  .upload-icon {
+    font-size: 3rem;
+  }
+  
+  .upload-text {
+    font-size: 1.2rem;
+  }
+  
+  .logo {
+    font-size: 1.5rem;
+  }
+  
+  .nav-button {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+    border-radius: 40px; 
+  }
+  
+  .nav {
+    gap: 0.5rem;
+  }
+  
+  .user-photo {
+    max-width: 80px;
+    max-height: 80px;
+  }
+  
+  .upload-area {
+    border-radius: 30px; 
+    padding: 2rem 1rem;
+  }
+}
+
+@media (max-width: 320px) {
+  .user-photo {
+    max-width: 60px;
+    max-height: 60px;
+  }
+  
+  .nav-button {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    border-radius: 35px;
+  }
 }
