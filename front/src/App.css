@@ -493,42 +493,58 @@ body {
   background-color: #f8f9fa;
   border-radius: 12px;
   margin: 20px 0;
+  border: 2px dashed #e0e0e0;
 }
 
 .development-content {
   text-align: center;
-  padding: 40px;
-  max-width: 500px;
+  padding: 60px 40px;
+  max-width: 600px;
+  background-color: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
 .development-icon {
-  font-size: 64px;
-  margin-bottom: 20px;
+  font-size: 80px;
+  margin-bottom: 24px;
 }
 
 .development-content h2 {
-  font-size: 24px;
+  font-size: 32px;
   color: #333;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
+  font-weight: 600;
 }
 
 .development-content p {
   color: #666;
-  margin-bottom: 30px;
+  font-size: 18px;
+  margin-bottom: 40px;
+  line-height: 1.5;
 }
 
+/* Красивая кнопка возврата */
 .development-button {
-  background-color: #007bff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  padding: 12px 30px;
-  border-radius: 8px;
-  font-size: 16px;
+  padding: 16px 40px;
+  border-radius: 50px;
+  font-size: 18px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s ease;
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+  display: inline-block;
 }
 
 .development-button:hover {
-  background-color: #0056b3;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+}
+
+.development-button:active {
+  transform: translateY(0);
 }
 }
