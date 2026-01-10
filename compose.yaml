@@ -1,0 +1,16 @@
+services:
+  back-service:
+    container_name: back-service
+    build: /back
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  front-service:
+    container_name: front-service
+    build: /front
+    depends_on:
+      - back-service
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
