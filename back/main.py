@@ -3,10 +3,23 @@ from datetime import datetime
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import Response
+from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 
 app = FastAPI(title="Simple Image Processing API")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",      # React dev server
+        "http://127.0.0.1:3000",      # альтернативный адрес
+        "http://localhost:8000",      # сам бэкенд (для Swagger)
+        "http://127.0.0.1:8000",      # альтернативный адрес бэкенда
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],              # Разрешить все HTTP методы
+    allow_headers=["*"],              # Разрешить все заголовки
+)
 
 def process_image(img: Image.Image) -> Image.Image:
     """
