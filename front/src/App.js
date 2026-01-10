@@ -307,9 +307,9 @@ function App() {
                   <div>
                     <p>Попробуйте:</p>
                     <ol style={{ textAlign: 'left', margin: '5px 0' }}>
-                      <li>Откройте <a href={`${API_URL}/docs`} target="_blank" rel="noopener noreferrer">{API_URL}/docs</a> в новой вкладке</li>
+                      <li>Откройте <a href={`${API_URL}/docs`} target="_blank" rel="noopener noreferrer">документацию бэкенда</a> в новой вкладке</li>
                       <li>Если страница открывается, значит бэкенд работает</li>
-                      <li>Если не открывается, проверьте что бэкенд запущен на порту 8000</li>
+                      <li>Если не открывается, проверьте что бэкенд запущен</li>
                     </ol>
                   </div>
                 )}
@@ -350,16 +350,6 @@ function App() {
                 {currentView === 'upload' && isRemoveBgSelected && (
                   <>
                     <p className="subtitle">Автоматически и бесплатно</p>
-                    {backendStatus === 'available' && (
-                      <p style={{ color: 'green', fontSize: '0.9rem', marginTop: '5px' }}>
-                        ✓ Сервер обработки доступен по адресу: {API_URL}
-                      </p>
-                    )}
-                    {backendStatus === 'unavailable' && (
-                      <p style={{ color: 'red', fontSize: '0.9rem', marginTop: '5px' }}>
-                        ✗ Сервер недоступен: {API_URL}
-                      </p>
-                    )}
                   </>
                 )}
               </div>
@@ -374,9 +364,6 @@ function App() {
                             <div className="upload-icon">📁</div>
                             <p className="upload-text">Выбрать изображение</p>
                             <p className="upload-subtext">PNG, JPG, JPEG до 10MB</p>
-                            <p className="backend-info">
-                              Сервер: {API_URL}
-                            </p>
                           </div>
                           <input
                             ref={fileInputRef}
