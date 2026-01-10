@@ -10,6 +10,7 @@ function App() {
   const [isFunctionsOpen, setIsFunctionsOpen] = useState(false);
   const [selectedFunction, setSelectedFunction] = useState('remove-bg');
   const [currentPage, setCurrentPage] = useState('main'); // 'main', 'profile'
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Проверка, выбрана ли функция удаления фона
   const isRemoveBgSelected = selectedFunction === 'remove-bg';
@@ -28,24 +29,67 @@ function App() {
       });
       setCurrentView('processing');
       setProcessedImage(null);
+      setUploadProgress(0);
     }
   };
 
-  const handleProcessImage = () => {
-    if (!originalImage || !isRemoveBgSelected || !isMainPage) return;
+  const handleProcessImage = async () => {
+    if (!originalImage || !originalImage.file || !isRemoveBgSelected || !isMainPage) return;
     
     setIsProcessing(true);
+    setUploadProgress(0);
     
-    setTimeout(() => {
+    try {
+      const formData = new FormData();
+      formData.append("file", originalImage.file); // имя "file" как в FastAPI
+
+      // Симуляция прогресса для UX
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return prev;
+          }
+          return prev + 10;
+        });
+      }, 300);
+
+      const response = await fetch("http://back-service:8000/process", {
+        method: "POST",
+        body: formData,
+      });
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      if (!response.ok) {
+        throw new Error(`Ошибка загрузки: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      
       const processedImageData = {
-        file: null,
-        url: fixedImage
+        file: blob,
+        url: url
       };
       
       setProcessedImage(processedImageData);
       setCurrentView('result');
+      
+    } catch (error) {
+      console.error("Upload failed:", error);
+      // В случае ошибки, показываем заглушку
+      const processedImageData = {
+        file: null,
+        url: fixedImage
+      };
+      setProcessedImage(processedImageData);
+      setCurrentView('result');
+    } finally {
       setIsProcessing(false);
-    }, 3000);
+      setUploadProgress(0);
+    }
   };
 
   const handleFunctionSelect = (functionName) => {
@@ -56,6 +100,9 @@ function App() {
     // Сбрасываем состояние при смене функции
     if (originalImage && originalImage.url) {
       URL.revokeObjectURL(originalImage.url);
+    }
+    if (processedImage && processedImage.url) {
+      URL.revokeObjectURL(processedImage.url);
     }
     
     setOriginalImage(null);
@@ -71,6 +118,9 @@ function App() {
     if (originalImage && originalImage.url) {
       URL.revokeObjectURL(originalImage.url);
     }
+    if (processedImage && processedImage.url) {
+      URL.revokeObjectURL(processedImage.url);
+    }
     
     setOriginalImage(null);
     setProcessedImage(null);
@@ -79,6 +129,9 @@ function App() {
   const handleNewImage = () => {
     if (originalImage && originalImage.url) {
       URL.revokeObjectURL(originalImage.url);
+    }
+    if (processedImage && processedImage.url) {
+      URL.revokeObjectURL(processedImage.url);
     }
     
     setOriginalImage(null);
@@ -253,6 +306,21 @@ function App() {
                             </div>
                           </div>
                         </div>
+                        
+                        {/* Индикатор прогресса */}
+                        {isProcessing && (
+                          <div className="progress-container">
+                            <div className="progress-bar">
+                              <div 
+                                className="progress-fill" 
+                                style={{ width: `${uploadProgress}%` }}
+                              ></div>
+                            </div>
+                            <p className="progress-text">
+                              {uploadProgress < 100 ? 'Обработка изображения...' : 'Завершение...'}
+                            </p>
+                          </div>
+                        )}
                         
                         <button 
                           className={`process-button ${isProcessing ? 'processing' : ''}`}
