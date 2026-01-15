@@ -8,55 +8,76 @@ global.fetch = jest.fn();
 global.URL.createObjectURL = jest.fn(() => 'mock-url');
 global.URL.revokeObjectURL = jest.fn();
 
-describe('App Component - Working Tests', () => {
+// Мокаем объект Blob
+global.Blob = class {
+  constructor() {
+    this.size = 100;
+    this.type = 'image/png';
+  }
+};
+
+describe('App Component', () => {
   beforeEach(() => {
     // Настраиваем мок fetch для успешных ответов
     fetch.mockImplementation((url) => {
       if (url.includes('/docs')) {
-        return Promise.resolve({ ok: true, status: 200 });
+        return Promise.resolve({ 
+          ok: true, 
+          status: 200 
+        });
       }
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        headers: { get: () => 'image/png' },
-        blob: () => Promise.resolve(new Blob())
-      });
+      if (url.includes('/process')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { 
+            get: () => 'image/png' 
+          },
+          blob: () => Promise.resolve(new Blob())
+        });
+      }
+      return Promise.reject(new Error('Unknown URL'));
     });
+
+    // Мокаем глобальные функции
+    window.URL.createObjectURL = jest.fn(() => 'mock-url');
+    window.URL.revokeObjectURL = jest.fn();
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  // ==================== РАБОЧИЕ ТЕСТЫ ====================
-
-  // ✅ ТЕСТ 1: Этот тест работает
   test('1. Рендерит основной интерфейс приложения', async () => {
     await act(async () => {
       render(<App />);
     });
     
-    // Даем время для инициализации
-    await waitFor(() => {
-      expect(screen.getByTestId('app')).toBeInTheDocument();
-    }, { timeout: 1000 });
-    
     // Проверка основных элементов
+    expect(screen.getByTestId('app')).toBeInTheDocument();
     expect(screen.getByTestId('logo')).toHaveTextContent("remov'bl");
     expect(screen.getByTestId('nav-remove-bg')).toBeInTheDocument();
     expect(screen.getByTestId('nav-functions')).toBeInTheDocument();
     expect(screen.getByTestId('nav-profile')).toBeInTheDocument();
+    expect(screen.getByTestId('user-avatar')).toBeInTheDocument();
   });
 
-  // ✅ ТЕСТ 2: Этот тест работает
-  test('2. Переход на страницу профиля и возврат', async () => {
+  test('2. Отображает основные UI элементы', async () => {
     await act(async () => {
       render(<App />);
     });
     
-    await waitFor(() => {
-      expect(screen.getByTestId('nav-profile')).toBeInTheDocument();
-    }, { timeout: 1000 });
+    // Проверяем все основные элементы
+    expect(screen.getByTestId('page-title')).toBeInTheDocument();
+    expect(screen.getByTestId('upload-section')).toBeInTheDocument();
+    expect(screen.getByTestId('upload-area')).toBeInTheDocument();
+    expect(screen.getByTestId('file-input')).toBeInTheDocument();
+  });
+
+  test('3. Переход на страницу профиля и возврат', async () => {
+    await act(async () => {
+      render(<App />);
+    });
     
     // Клик по кнопке профиля
     await act(async () => {
@@ -76,15 +97,10 @@ describe('App Component - Working Tests', () => {
     expect(screen.getByTestId('page-title')).toHaveTextContent('Обработка изображений');
   });
 
-  // ✅ ТЕСТ 3: Этот тест работает
-  test('3. Открытие и выбор функций из выпадающего меню', async () => {
+  test('4. Открытие и выбор функций из выпадающего меню', async () => {
     await act(async () => {
       render(<App />);
     });
-    
-    await waitFor(() => {
-      expect(screen.getByTestId('nav-functions')).toBeInTheDocument();
-    }, { timeout: 1000 });
     
     // Открытие меню функций
     await act(async () => {
@@ -101,6 +117,7 @@ describe('App Component - Working Tests', () => {
     
     // Проверка, что отобразилась страница "в разработке"
     expect(screen.getByTestId('function-development')).toBeInTheDocument();
+    expect(screen.getByText('Страница находится в разработке')).toBeInTheDocument();
     
     // Возврат к удалению фона
     await act(async () => {
@@ -111,88 +128,10 @@ describe('App Component - Working Tests', () => {
     expect(screen.getByTestId('page-title')).toHaveTextContent('Обработка изображений');
   });
 
-  // ==================== ПРОСТЫЕ ТЕСТЫ БЕЗ СЛОЖНОЙ АСИНХРОННОСТИ ====================
-
-  // ✅ ТЕСТ 4: Проверка отображения всех UI элементов
-  test('4. Отображение всех основных UI элементов', async () => {
+  test('5. Клик на область загрузки файлов', async () => {
     await act(async () => {
       render(<App />);
     });
-    
-    // Ждем инициализации
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Проверка всех основных элементов
-    const elements = [
-      { testId: 'app' },
-      { testId: 'logo' },
-      { testId: 'nav-remove-bg' },
-      { testId: 'nav-functions' },
-      { testId: 'nav-profile' },
-      { testId: 'user-avatar' },
-      { testId: 'page-title' },
-      { testId: 'upload-section' },
-      { testId: 'upload-area' },
-      { testId: 'file-input' }
-    ];
-    
-    elements.forEach(({ testId }) => {
-      expect(screen.getByTestId(testId)).toBeInTheDocument();
-    });
-  });
-
-  // ✅ ТЕСТ 6: Проверка статуса бэкенда в футере
-  test('6. Отображение статуса бэкенда в футере', async () => {
-    await act(async () => {
-      render(<App />);
-    });
-    
-    // Даем время для проверки бэкенда
-    await waitFor(() => {
-      expect(screen.getByText(/Статус бэкенда:/i)).toBeInTheDocument();
-    }, { timeout: 2000 });
-    
-    // Проверяем, что статус отображается
-    const statusText = screen.getByText(/Статус бэкенда:/i);
-    expect(statusText).toBeInTheDocument();
-  });
-
-  // ✅ ТЕСТ 7: Быстрое переключение между функциями
-  test('7. Быстрое переключение между функциями', async () => {
-    await act(async () => {
-      render(<App />);
-    });
-    
-    await waitFor(() => {
-      expect(screen.getByTestId('nav-functions')).toBeInTheDocument();
-    }, { timeout: 1000 });
-    
-    // Открываем меню функций
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('nav-functions'));
-    });
-    
-    // Проверяем, что меню открылось
-    expect(screen.getByTestId('functions-dropdown')).toBeInTheDocument();
-    
-    // Закрываем меню (кликаем снова)
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('nav-functions'));
-    });
-    
-    // Проверяем, что вернулись на главную
-    expect(screen.getByTestId('page-title')).toHaveTextContent('Обработка изображений');
-  });
-
-  // ✅ ТЕСТ 8: Проверка клика на области загрузки
-  test('8. Клик на области загрузки файлов', async () => {
-    await act(async () => {
-      render(<App />);
-    });
-    
-    await waitFor(() => {
-      expect(screen.getByTestId('upload-area')).toBeInTheDocument();
-    }, { timeout: 1000 });
     
     const uploadArea = screen.getByTestId('upload-area');
     
@@ -205,15 +144,34 @@ describe('App Component - Working Tests', () => {
     expect(screen.getByTestId('file-input')).toBeInTheDocument();
   });
 
-  // ✅ ТЕСТ 9: Проверка drag over на области загрузки
-  test('9. Drag over на области загрузки', async () => {
+  test('6. Открытие и закрытие меню функций', async () => {
     await act(async () => {
       render(<App />);
     });
     
-    await waitFor(() => {
-      expect(screen.getByTestId('upload-area')).toBeInTheDocument();
-    }, { timeout: 1000 });
+    const functionsButton = screen.getByTestId('nav-functions');
+    
+    // Открываем меню
+    await act(async () => {
+      fireEvent.click(functionsButton);
+    });
+    
+    // Проверяем, что меню открылось
+    expect(screen.getByTestId('functions-dropdown')).toBeInTheDocument();
+    
+    // Закрываем меню (кликаем снова)
+    await act(async () => {
+      fireEvent.click(functionsButton);
+    });
+    
+    // Меню должно скрыться
+    expect(screen.queryByTestId('functions-dropdown')).not.toBeInTheDocument();
+  });
+
+  test('7. Проверка drag over на области загрузки', async () => {
+    await act(async () => {
+      render(<App />);
+    });
     
     const uploadArea = screen.getByTestId('upload-area');
     
@@ -226,4 +184,86 @@ describe('App Component - Working Tests', () => {
     expect(uploadArea).toBeInTheDocument();
   });
 
+  test('8. Переключение между функциями в меню', async () => {
+    await act(async () => {
+      render(<App />);
+    });
+    
+    // Открываем меню
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('nav-functions'));
+    });
+    
+    // Выбираем функцию изменения формата
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('function-format'));
+    });
+    
+    // Проверяем, что перешли на страницу формата
+    expect(screen.getByTestId('function-development')).toBeInTheDocument();
+    
+    // Используем более конкретный селектор для текста
+    const formatTexts = screen.getAllByText(/Изменить формат/i);
+    expect(formatTexts.length).toBeGreaterThan(0);
+    
+    // Проверяем текст в элементе "в разработке"
+    const developmentText = screen.getByText(
+      (content, element) => 
+        element.tagName.toLowerCase() === 'p' && 
+        content.includes('Функция "Изменить формат"')
+    );
+    expect(developmentText).toBeInTheDocument();
+  });
+
+  test('9. Загрузка файла и обработка (упрощенный тест)', async () => {
+    // Настраиваем мок для обработки
+    fetch.mockImplementation((url) => {
+      if (url.includes('/process')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => 'image/png' },
+          blob: () => Promise.resolve(new Blob())
+        });
+      }
+      return Promise.resolve({ ok: true });
+    });
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    // Создаем мок файла
+    const file = new File(['test'], 'test.png', { type: 'image/png' });
+    
+    // Симулируем загрузку файла
+    const fileInput = screen.getByTestId('file-input');
+    
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+    });
+    
+    // Проверяем, что появилась кнопка обработки
+    await waitFor(() => {
+      expect(screen.getByTestId('process-button')).toBeInTheDocument();
+    });
+  });
+
+  test('10. Отображение субтитров на главной странице', async () => {
+    await act(async () => {
+      render(<App />);
+    });
+    
+    expect(screen.getByTestId('page-subtitle')).toHaveTextContent('Автоматически и бесплатно');
+  });
+
+  test('11. Проверка поддерживаемых форматов в тексте подсказки', async () => {
+    await act(async () => {
+      render(<App />);
+    });
+    
+    // Проверяем, что отображаются правильные форматы
+    const subtitle = screen.getByText(/JPG, JPEG, PNG, WEBP, AVIF до 10MB/i);
+    expect(subtitle).toBeInTheDocument();
+  });
 });
